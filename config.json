@@ -1,0 +1,24 @@
+{
+  "finnhub_api_key": "d62maehr01qldki8n9tgd62maehr01qldki8n9u0",
+  "line_channel_token": "bZXtZwcoWTVBsjOtS+7Lcka9vBeQve1eGsgPVS2JVBxrG3QovK1nSPQnG2uVZsNKfcvC5/GFRUts6aDrQD9fCx9Xz1BmuVnOBrSrNP0tEfQOn1ZkROlfM26rsNSfVTUPtNh2Svf0V9Gt7tSsHJu7/QdB04t89/1O/w1cDnyilFU=",
+  "line_user_id": "U5c370055d4c2130bfe5098c080379833",
+
+  "stocks": {
+    "AMD": {
+      "alert_up": 220,
+      "alert_down": 190
+    },
+    "GOOGL": {
+      "alert_up": 350,
+      "alert_down": 300
+    },
+    "RKLB": {
+      "alert_up": 10,
+      "alert_down": 5
+    },
+    "EOSE": {
+      "alert_up": 3,
+      "alert_down": 1
+    }
+  }
+}
