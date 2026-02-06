@@ -1,16 +1,17 @@
 import requests
 import json
 import time
-
+import os
 # =========================
 # LOAD CONFIG
 # =========================
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
-FINNHUB_API_KEY = config["finnhub_api_key"]
-LINE_TOKEN = config["line_channel_token"]
-LINE_USER_ID = config["line_user_id"]
+
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+LINE_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
+LINE_USER_ID = os.getenv("LINE_USER_ID")
 STOCKS = config["stocks"]
 
 # =========================
@@ -77,3 +78,4 @@ for symbol, alert in STOCKS.items():
 
 send_line(message)
 print("✅ ส่งเข้า LINE แล้ว")
+
