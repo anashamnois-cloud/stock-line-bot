@@ -6,19 +6,20 @@
   "stocks": {
     "AMD": {
       "alert_up": 220,
-      "alert_down": 190
+      "alert_down": 200
     },
     "GOOGL": {
       "alert_up": 350,
       "alert_down": 300
     },
     "RKLB": {
-      "alert_up": 10,
-      "alert_down": 5
+      "alert_up": 80,
+      "alert_down": 65
     },
     "EOSE": {
-      "alert_up": 3,
-      "alert_down": 1
+      "alert_up": 17,
+      "alert_down": 11
     }
   }
 }
+
