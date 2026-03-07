@@ -91,13 +91,25 @@ for symbol, alert in STOCKS.items():
 
     # 🔻 หลุดเป้าลง
     elif price <= alert["alert_down"]:
-        if last_status != "down":
-            send_line(
-                f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
-                f"ราคา: {price}\n"
-                f"เป้า: {alert['alert_down']}"
-            )
-            state[symbol] = "down"
+        
+    last_price = state.get(symbol)
+    
+    # แจ้งครั้งแรก
+    if last_price is None:
+        send_line(
+            f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
+            f"ราคา: {price}\n"
+            f"เป้า: {alert['alert_down']}"
+        )
+        state[symbol] = price
+
+    # ลงเพิ่มอีก 5$ ค่อยแจ้ง
+    elif last_price - price >= 5:
+        send_line(
+            f"🔻 {symbol} ลงเพิ่มแล้ว\n"
+            f"ราคา: {price}"
+        )
+        state[symbol] = price
 
     # 🔁 กลับเข้ากลาง รีเซ็ต
     else:
@@ -107,3 +119,4 @@ for symbol, alert in STOCKS.items():
 
 save_state()
 print("✅ เช็กราคาเสร็จแล้ว")
+
