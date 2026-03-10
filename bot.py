@@ -61,6 +61,14 @@ def send_line(msg):
 # =========================
 # MAIN
 # =========================
+from datetime import datetime, timezone, timedelta
+
+tz = timezone(timedelta(hours=7))
+now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+print(f"🕐 รันเวลา: {now} (เวลาไทย)")
+send_line(f"🤖 Bot เริ่มทำงาน\n🕐 เวลา: {now} (เวลาไทย)")
+
 print("📊 Stock Line Bot started")
 for symbol, alert in STOCKS.items():
     price = get_price(symbol)
@@ -110,3 +118,4 @@ for symbol, alert in STOCKS.items():
 
 save_state()
 print("✅ เช็กราคาเสร็จแล้ว")
+
