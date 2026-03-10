@@ -2,20 +2,16 @@ import requests
 import json
 import time
 import os
-
 # =========================
 # LOAD CONFIG
 # =========================
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
-
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 LINE_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
 STOCKS = config["stocks"]
-
 STATE_FILE = "state.json"
-
 # =========================
 # LOAD STATE
 # =========================
@@ -24,14 +20,12 @@ if os.path.exists(STATE_FILE):
         state = json.load(f)
 else:
     state = {}
-
 # =========================
 # SAVE STATE
 # =========================
 def save_state():
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f)
-
 # =========================
 # GET STOCK PRICE
 # =========================
@@ -41,14 +35,12 @@ def get_price(symbol):
         "symbol": symbol,
         "token": FINNHUB_API_KEY
     }
-
     try:
         r = requests.get(url, params=params, timeout=10)
         data = r.json()
         return data.get("c")
     except:
         return None
-
 # =========================
 # SEND LINE MESSAGE
 # =========================
@@ -66,12 +58,10 @@ def send_line(msg):
         }]
     }
     requests.post(url, headers=headers, json=payload)
-
 # =========================
 # MAIN
 # =========================
 print("📊 Stock Line Bot started")
-
 for symbol, alert in STOCKS.items():
     price = get_price(symbol)
     if price is None:
@@ -91,32 +81,32 @@ for symbol, alert in STOCKS.items():
 
     # 🔻 หลุดเป้าลง
     elif price <= alert["alert_down"]:
-        
-    last_price = state.get(symbol)
-    
-    # แจ้งครั้งแรก
-    if last_price is None:
-        send_line(
-            f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
-            f"ราคา: {price}\n"
-            f"เป้า: {alert['alert_down']}"
-        )
-        state[symbol] = price
+        last_price = state.get(f"{symbol}_last_down_price")
 
-    # ลงเพิ่มอีก 5$ ค่อยแจ้ง
-    elif last_price - price >= 5:
-        send_line(
-            f"🔻 {symbol} ลงเพิ่มแล้ว\n"
-            f"ราคา: {price}"
-        )
-        state[symbol] = price
+        # แจ้งครั้งแรก
+        if last_status != "down":
+            send_line(
+                f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
+                f"ราคา: {price}\n"
+                f"เป้า: {alert['alert_down']}"
+            )
+            state[symbol] = "down"
+            state[f"{symbol}_last_down_price"] = price
+
+        # ลงเพิ่มอีก 5$ ค่อยแจ้ง
+        elif last_price is not None and last_price - price >= 5:
+            send_line(
+                f"🔻 {symbol} ลงเพิ่มแล้ว\n"
+                f"ราคา: {price}"
+            )
+            state[f"{symbol}_last_down_price"] = price
 
     # 🔁 กลับเข้ากลาง รีเซ็ต
     else:
         state[symbol] = "neutral"
+        state.pop(f"{symbol}_last_down_price", None)
 
     time.sleep(1)
 
 save_state()
 print("✅ เช็กราคาเสร็จแล้ว")
-
