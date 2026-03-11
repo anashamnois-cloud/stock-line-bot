@@ -1,14 +1,10 @@
 name: Stock Line Bot
 on:
   schedule:
-    # ช่วง 21:30 - 23:55 (ไทย) = 14:30 - 16:55 UTC วันจันทร์-ศุกร์
     - cron: "30,35,40,45,50,55 14 * * 1-5"
     - cron: "*/5 15,16 * * 1-5"
-
-    # ช่วง 00:00 - 04:00 (ไทย) = 17:00 - 21:00 UTC วันอังคาร-เสาร์
     - cron: "*/5 17,18,19,20 * * 2-6"
     - cron: "0 21 * * 2-6"
-
   workflow_dispatch:
 
 jobs:
@@ -17,15 +13,31 @@ jobs:
     steps:
       - name: Download code
         uses: actions/checkout@v4
+
+      - name: Load state cache
+        uses: actions/cache/restore@v3
+        with:
+          path: state.json
+          key: state-cache-${{ github.run_id }}
+          restore-keys: state-cache
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install libraries
         run: pip install -r requirements.txt
+
       - name: Run stock bot
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
         run: python bot.py
+
+      - name: Save state cache
+        uses: actions/cache/save@v3
+        with:
+          path: state.json
+          key: state-cache-${{ github.run_id }}
