@@ -2,6 +2,8 @@ import requests
 import json
 import time
 import os
+from datetime import datetime, timezone, timedelta
+
 # =========================
 # LOAD CONFIG
 # =========================
@@ -12,35 +14,59 @@ LINE_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
 STOCKS = config["stocks"]
 STATE_FILE = "state.json"
+TZ = timezone(timedelta(hours=7))
+
 # =========================
 # LOAD STATE
 # =========================
-if os.path.exists(STATE_FILE):
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        state = json.load(f)
-else:
-    state = {}
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
 # =========================
 # SAVE STATE
 # =========================
-def save_state():
+def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f)
+
+# =========================
+# เช็คว่าตลาดเปิดอยู่ไหม
+# =========================
+def is_market_open():
+    now = datetime.now(TZ)
+    weekday = now.weekday()  # 0=จันทร์, 6=อาทิตย์
+    hour = now.hour
+    minute = now.minute
+    total_minutes = hour * 60 + minute
+
+    # ตลาดเปิด 21:30 - 04:00 จันทร์-ศุกร์ (รวมข้ามคืน)
+    market_open = 21 * 60 + 30   # 21:30
+    midnight = 24 * 60           # 00:00
+    market_close = 4 * 60        # 04:00
+
+    # ช่วง 21:30 - 23:59 วันจันทร์-ศุกร์
+    if weekday <= 4 and total_minutes >= market_open:
+        return True
+    # ช่วง 00:00 - 04:00 วันอังคาร-เสาร์ (ข้ามคืน)
+    if weekday >= 1 and weekday <= 5 and total_minutes < market_close:
+        return True
+    return False
+
 # =========================
 # GET STOCK PRICE
 # =========================
 def get_price(symbol):
     url = "https://finnhub.io/api/v1/quote"
-    params = {
-        "symbol": symbol,
-        "token": FINNHUB_API_KEY
-    }
+    params = {"symbol": symbol, "token": FINNHUB_API_KEY}
     try:
         r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        return data.get("c")
+        return r.json().get("c")
     except:
         return None
+
 # =========================
 # SEND LINE MESSAGE
 # =========================
@@ -52,70 +78,84 @@ def send_line(msg):
     }
     payload = {
         "to": LINE_USER_ID,
-        "messages": [{
-            "type": "text",
-            "text": msg
-        }]
+        "messages": [{"type": "text", "text": msg}]
     }
     requests.post(url, headers=headers, json=payload)
+
 # =========================
-# MAIN
+# เช็คราคาหุ้น
 # =========================
-from datetime import datetime, timezone, timedelta
+def check_stocks(state):
+    for symbol, alert in STOCKS.items():
+        price = get_price(symbol)
+        if price is None:
+            continue
+        last_status = state.get(symbol)
 
-tz = timezone(timedelta(hours=7))
-now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+        # 🚀 แตะเป้าขึ้น
+        if price >= alert["alert_up"]:
+            if last_status != "up":
+                send_line(
+                    f"🚀 {symbol} แตะเป้าขึ้นแล้ว\n"
+                    f"ราคา: {price}\n"
+                    f"เป้า: {alert['alert_up']}"
+                )
+                state[symbol] = "up"
 
-print(f"🕐 รันเวลา: {now} (เวลาไทย)")
-send_line(f"🤖 Bot เริ่มทำงาน\n🕐 เวลา: {now} (เวลาไทย)")
+        # 🔻 หลุดเป้าลง
+        elif price <= alert["alert_down"]:
+            last_price = state.get(f"{symbol}_last_down_price")
+            if last_status != "down":
+                send_line(
+                    f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
+                    f"ราคา: {price}\n"
+                    f"เป้า: {alert['alert_down']}"
+                )
+                state[symbol] = "down"
+                state[f"{symbol}_last_down_price"] = price
+            elif last_price is not None and last_price - price >= 5:
+                send_line(
+                    f"🔻 {symbol} ลงเพิ่มแล้ว\n"
+                    f"ราคา: {price}"
+                )
+                state[f"{symbol}_last_down_price"] = price
 
-print("📊 Stock Line Bot started")
-for symbol, alert in STOCKS.items():
-    price = get_price(symbol)
-    if price is None:
-        continue
+        # 🔁 กลับเข้ากลาง รีเซ็ต
+        else:
+            state[symbol] = "neutral"
+            state.pop(f"{symbol}_last_down_price", None)
 
-    last_status = state.get(symbol)
+        time.sleep(1)
+    return state
 
-    # 🚀 แตะเป้าขึ้น
-    if price >= alert["alert_up"]:
-        if last_status != "up":
-            send_line(
-                f"🚀 {symbol} แตะเป้าขึ้นแล้ว\n"
-                f"ราคา: {price}\n"
-                f"เป้า: {alert['alert_up']}"
-            )
-            state[symbol] = "up"
+# =========================
+# MAIN LOOP
+# =========================
+print("🤖 Stock Bot เริ่มทำงานบน Railway")
+market_was_open = False
 
-    # 🔻 หลุดเป้าลง
-    elif price <= alert["alert_down"]:
-        last_price = state.get(f"{symbol}_last_down_price")
+while True:
+    now = datetime.now(TZ)
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # แจ้งครั้งแรก
-        if last_status != "down":
-            send_line(
-                f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
-                f"ราคา: {price}\n"
-                f"เป้า: {alert['alert_down']}"
-            )
-            state[symbol] = "down"
-            state[f"{symbol}_last_down_price"] = price
+    if is_market_open():
+        # แจ้งตอนตลาดเปิดครั้งแรกเท่านั้น
+        if not market_was_open:
+            send_line(f"🔔 ตลาดเปิดแล้ว\n🕐 เวลา: {now_str}")
+            market_was_open = True
 
-        # ลงเพิ่มอีก 5$ ค่อยแจ้ง
-        elif last_price is not None and last_price - price >= 5:
-            send_line(
-                f"🔻 {symbol} ลงเพิ่มแล้ว\n"
-                f"ราคา: {price}"
-            )
-            state[f"{symbol}_last_down_price"] = price
+        print(f"📊 เช็คราคา: {now_str}")
+        state = load_state()
+        state = check_stocks(state)
+        save_state(state)
+        print("✅ เสร็จแล้ว รอ 5 นาที...")
+        time.sleep(300)  # รอ 5 นาที
 
-    # 🔁 กลับเข้ากลาง รีเซ็ต
     else:
-        state[symbol] = "neutral"
-        state.pop(f"{symbol}_last_down_price", None)
+        # แจ้งตอนตลาดปิดครั้งแรกเท่านั้น
+        if market_was_open:
+            send_line(f"🔕 ตลาดปิดแล้ว\n🕐 เวลา: {now_str}")
+            market_was_open = False
 
-    time.sleep(1)
-
-save_state()
-print("✅ เช็กราคาเสร็จแล้ว")
-
+        print(f"⏸ ตลาดปิด รอ... {now_str}")
+        time.sleep(60)  # เช็คทุก 1 นาทีว่าตลาดเปิดหรือยัง
