@@ -127,14 +127,21 @@ def check_stocks(state):
 # =========================
 print("🤖 Bot started")
 state = load_state()
+notified_open = False  # ตัวแปรจำว่าแจ้งไปแล้วหรือยัง
 
 while True:
     if is_market_open():
+        # แจ้งแค่ครั้งแรกที่ตลาดเปิด
+        if not notified_open:
+            send_line("🤖 Bot เริ่มทำงานแล้ว")
+            notified_open = True
+
         state = check_stocks(state)
         save_state(state)
-        time.sleep(60)  # เช็คทุก 1 นาที
+        time.sleep(60)
     else:
-        # รีเซ็ต state ตอนตลาดปิด
+        # รีเซ็ตเมื่อตลาดปิด
+        notified_open = False
         state = {}
         save_state(state)
-        time.sleep(60)  # รอ 1 นาทีแล้วเช็คใหม่
+        time.sleep(60)
