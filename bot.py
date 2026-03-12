@@ -17,7 +17,7 @@ STATE_FILE = "state.json"
 TZ = timezone(timedelta(hours=7))
 
 # =========================
-# LOAD STATE
+# LOAD / SAVE STATE
 # =========================
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -25,9 +25,6 @@ def load_state():
             return json.load(f)
     return {}
 
-# =========================
-# SAVE STATE
-# =========================
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f)
@@ -38,20 +35,16 @@ def save_state(state):
 def is_market_open():
     now = datetime.now(TZ)
     weekday = now.weekday()  # 0=จันทร์, 6=อาทิตย์
-    hour = now.hour
-    minute = now.minute
-    total_minutes = hour * 60 + minute
+    total_minutes = now.hour * 60 + now.minute
 
-    # ตลาดเปิด 21:30 - 04:00 จันทร์-ศุกร์ (รวมข้ามคืน)
-    market_open = 21 * 60 + 30   # 21:30
-    midnight = 24 * 60           # 00:00
-    market_close = 4 * 60        # 04:00
+    market_open  = 21 * 60 + 30  # 21:30
+    market_close =  4 * 60       # 04:00
 
-    # ช่วง 21:30 - 23:59 วันจันทร์-ศุกร์
+    # 21:30 - 23:59 วันจันทร์-ศุกร์
     if weekday <= 4 and total_minutes >= market_open:
         return True
-    # ช่วง 00:00 - 04:00 วันอังคาร-เสาร์ (ข้ามคืน)
-    if weekday >= 1 and weekday <= 5 and total_minutes < market_close:
+    # 00:00 - 04:00 วันอังคาร-เสาร์ (ข้ามคืน)
+    if 1 <= weekday <= 5 and total_minutes < market_close:
         return True
     return False
 
@@ -90,6 +83,7 @@ def check_stocks(state):
         price = get_price(symbol)
         if price is None:
             continue
+
         last_status = state.get(symbol)
 
         # 🚀 แตะเป้าขึ้น
@@ -131,31 +125,16 @@ def check_stocks(state):
 # =========================
 # MAIN LOOP
 # =========================
-print("🤖 Stock Bot เริ่มทำงานบน Railway")
-market_was_open = False
+print("🤖 Bot started")
+state = load_state()
 
 while True:
-    now = datetime.now(TZ)
-    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
-
     if is_market_open():
-        # แจ้งตอนตลาดเปิดครั้งแรกเท่านั้น
-        if not market_was_open:
-            send_line(f"🔔 ตลาดเปิดแล้ว\n🕐 เวลา: {now_str}")
-            market_was_open = True
-
-        print(f"📊 เช็คราคา: {now_str}")
-        state = load_state()
         state = check_stocks(state)
         save_state(state)
-        print("✅ เสร็จแล้ว รอ 5 นาที...")
-        time.sleep(300)  # รอ 5 นาที
-
+        time.sleep(60)  # เช็คทุก 1 นาที
     else:
-        # แจ้งตอนตลาดปิดครั้งแรกเท่านั้น
-        if market_was_open:
-            send_line(f"🔕 ตลาดปิดแล้ว\n🕐 เวลา: {now_str}")
-            market_was_open = False
-
-        print(f"⏸ ตลาดปิด รอ... {now_str}")
-        time.sleep(60)  # เช็คทุก 1 นาทีว่าตลาดเปิดหรือยัง
+        # รีเซ็ต state ตอนตลาดปิด
+        state = {}
+        save_state(state)
+        time.sleep(60)  # รอ 1 นาทีแล้วเช็คใหม่
