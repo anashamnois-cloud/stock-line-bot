@@ -34,16 +34,12 @@ def save_state(state):
 # =========================
 def is_market_open():
     now = datetime.now(TZ)
-    weekday = now.weekday()  # 0=จันทร์, 6=อาทิตย์
+    weekday = now.weekday()
     total_minutes = now.hour * 60 + now.minute
-
-    market_open  = 21 * 60 + 30  # 21:30
-    market_close =  4 * 60       # 04:00
-
-    # 21:30 - 23:59 วันจันทร์-ศุกร์
+    market_open  = 21 * 60 + 30
+    market_close =  4 * 60
     if weekday <= 4 and total_minutes >= market_open:
         return True
-    # 00:00 - 04:00 วันอังคาร-เสาร์ (ข้ามคืน)
     if 1 <= weekday <= 5 and total_minutes < market_close:
         return True
     return False
@@ -86,7 +82,6 @@ def check_stocks(state):
 
         last_status = state.get(symbol)
 
-        # 🚀 แตะเป้าขึ้น
         if price >= alert["alert_up"]:
             if last_status != "up":
                 send_line(
@@ -96,7 +91,6 @@ def check_stocks(state):
                 )
                 state[symbol] = "up"
 
-        # 🔻 หลุดเป้าลง
         elif price <= alert["alert_down"]:
             last_price = state.get(f"{symbol}_last_down_price")
             if last_status != "down":
@@ -113,8 +107,6 @@ def check_stocks(state):
                     f"ราคา: {price}"
                 )
                 state[f"{symbol}_last_down_price"] = price
-
-        # 🔁 กลับเข้ากลาง รีเซ็ต
         else:
             state[symbol] = "neutral"
             state.pop(f"{symbol}_last_down_price", None)
@@ -127,21 +119,19 @@ def check_stocks(state):
 # =========================
 print("🤖 Bot started")
 state = load_state()
-notified_open = False  # ตัวแปรจำว่าแจ้งไปแล้วหรือยัง
 
 while True:
     if is_market_open():
-        # แจ้งแค่ครั้งแรกที่ตลาดเปิด
-        if not notified_open:
+        # แจ้งครั้งแรกโดยเช็คจาก state ไม่ใช่ตัวแปร
+        if not state.get("_notified_open"):
             send_line("🤖 Bot เริ่มทำงานแล้ว")
-            notified_open = True
+            state["_notified_open"] = True
+            save_state(state)
 
         state = check_stocks(state)
         save_state(state)
         time.sleep(60)
     else:
-        # รีเซ็ตเมื่อตลาดปิด
-        notified_open = False
         state = {}
         save_state(state)
         time.sleep(60)
