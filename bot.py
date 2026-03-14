@@ -4,68 +4,87 @@ import time
 import os
 from datetime import datetime, timezone, timedelta
 
-# =========================
-# LOAD CONFIG
-# =========================
+# -----------------------
+# CONFIG
+# -----------------------
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
+
+STOCKS = config["stocks"]
 
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 LINE_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
-STOCKS = config["stocks"]
 
 STATE_FILE = "state.json"
+
 TZ = timezone(timedelta(hours=7))
 
-# =========================
-# LOAD / SAVE STATE
-# =========================
+
+# -----------------------
+# STATE
+# -----------------------
 def load_state():
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
     return {}
 
 def save_state(state):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+    with open(STATE_FILE, "w") as f:
         json.dump(state, f)
 
-# =========================
-# เช็คว่าตลาดเปิดอยู่ไหม
-# =========================
-def is_market_open():
+
+# -----------------------
+# MARKET TIME
+# -----------------------
+def market_open():
+
     now = datetime.now(TZ)
     weekday = now.weekday()
-    total_minutes = now.hour * 60 + now.minute
 
-    market_open  = 21 * 60 + 30
-    market_close = 4 * 60
+    minutes = now.hour * 60 + now.minute
 
-    if weekday <= 4 and total_minutes >= market_open:
+    open_time = 21 * 60 + 30
+    close_time = 4 * 60
+
+    if weekday <= 4 and minutes >= open_time:
         return True
-    if 1 <= weekday <= 5 and total_minutes < market_close:
+
+    if 1 <= weekday <= 5 and minutes < close_time:
         return True
 
     return False
 
-# =========================
-# GET STOCK PRICE
-# =========================
+
+# -----------------------
+# GET PRICE
+# -----------------------
 def get_price(symbol):
+
     url = "https://finnhub.io/api/v1/quote"
-    params = {"symbol": symbol, "token": FINNHUB_API_KEY}
+
+    params = {
+        "symbol": symbol,
+        "token": FINNHUB_API_KEY
+    }
 
     try:
         r = requests.get(url, params=params, timeout=10)
-        return r.json().get("c")
+        data = r.json()
+        return data.get("c")
     except:
         return None
 
-# =========================
-# SEND LINE MESSAGE
-# =========================
-def send_line(msg):
+
+# -----------------------
+# LINE
+# -----------------------
+def send_line(text):
+
     url = "https://api.line.me/v2/bot/message/push"
 
     headers = {
@@ -75,87 +94,78 @@ def send_line(msg):
 
     payload = {
         "to": LINE_USER_ID,
-        "messages": [{"type": "text", "text": msg}]
+        "messages": [{
+            "type": "text",
+            "text": text
+        }]
     }
 
     requests.post(url, headers=headers, json=payload)
 
-# =========================
-# เช็คราคาหุ้น
-# =========================
-def check_stocks(state):
-    for symbol, alert in STOCKS.items():
 
-        price = get_price(symbol)
-        if price is None:
-            continue
+# -----------------------
+# CHECK STOCK
+# -----------------------
+def check_stock(symbol, rule, state):
 
-        last_status = state.get(symbol, "neutral")
+    price = get_price(symbol)
 
-        # 🚀 แตะเป้าขึ้น
-        if price >= alert["alert_up"]:
-            if last_status != "up":
-                send_line(
-                    f"🚀 {symbol} แตะเป้าขึ้นแล้ว\n"
-                    f"ราคา: {price}\n"
-                    f"เป้า: {alert['alert_up']}"
-                )
-                state[symbol] = "up"
+    if price is None:
+        return
 
-        # 🔻 หลุดเป้าลง
-        elif price <= alert["alert_down"]:
+    key = f"{symbol}_last_alert"
 
-            last_price = state.get(f"{symbol}_last_down_price")
+    target = rule["alert_down"]
 
-            if last_status != "down":
-                send_line(
-                    f"🔻 {symbol} หลุดเป้าลงแล้ว\n"
-                    f"ราคา: {price}\n"
-                    f"เป้า: {alert['alert_down']}"
-                )
+    # ต่ำกว่าเป้า
+    if price <= target:
 
-                state[symbol] = "down"
-                state[f"{symbol}_last_down_price"] = price
+        last = state.get(key)
 
-            elif last_price is not None and last_price - price >= 5:
+        # แจ้งครั้งแรก
+        if last is None:
 
-                send_line(
-                    f"🔻 {symbol} ลงเพิ่มแล้ว\n"
-                    f"ราคา: {price}"
-                )
+            send_line(
+                f"🔻 {symbol} หลุดเป้า\n"
+                f"ราคา: {price}\n"
+                f"เป้า: {target}"
+            )
 
-                state[f"{symbol}_last_down_price"] = price
+            state[key] = price
 
-        # 🔁 กลับเข้ากลาง
-        else:
-            state[symbol] = "neutral"
-            state.pop(f"{symbol}_last_down_price", None)
+        # ลงเพิ่ม 5$
+        elif last - price >= 5:
 
-        time.sleep(1)
+            send_line(
+                f"🔻 {symbol} ลงเพิ่ม\n"
+                f"ราคา: {price}"
+            )
 
-    return state
+            state[key] = price
 
-# =========================
+    else:
+        # กลับเหนือเป้า รีเซ็ต
+        if key in state:
+            del state[key]
+
+
+# -----------------------
 # MAIN LOOP
-# =========================
-print("🤖 Bot started")
+# -----------------------
+print("bot running...")
 
 state = load_state()
 
 while True:
 
-    if is_market_open():
+    if market_open():
 
-        if not state.get("_notified_open"):
-            send_line("🤖 Bot เริ่มทำงานแล้ว")
-            state["_notified_open"] = True
-            save_state(state)
+        for symbol, rule in STOCKS.items():
 
-        state = check_stocks(state)
+            check_stock(symbol, rule, state)
+
+            time.sleep(1)
+
         save_state(state)
 
-        time.sleep(60)
-
-    else:
-        # ตลาดปิด → รอเฉย ๆ (ไม่ลบ state แล้ว)
-        time.sleep(60)
+    time.sleep(60)
