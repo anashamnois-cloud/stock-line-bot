@@ -1,43 +1,41 @@
 name: Stock Line Bot
+
 on:
   schedule:
-    - cron: "30,35,40,45,50,55 14 * * 1-5"
-    - cron: "*/5 15,16 * * 1-5"
-    - cron: "*/5 17,18,19,20 * * 2-6"
-    - cron: "0 21 * * 2-6"
-  workflow_dispatch:
+    # รันทุก 5 นาที ในช่วงเวลาตลาดเปิด (ปรับตามความต้องการ)
+    - cron: "*/5 14-21 * * 1-5" 
+  workflow_dispatch: # กดรันเองได้
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    # อนุญาตให้บอทเขียนไฟล์กลับเข้า GitHub ได้
+    permissions:
+      contents: write 
+      
     steps:
-      - name: Download code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Load state cache
-        uses: actions/cache/restore@v3
-        with:
-          path: state.json
-          key: state-cache-${{ github.run_id }}
-          restore-keys: state-cache
-
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install libraries
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install requests
 
-      - name: Run stock bot
+      - name: Run bot
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
         run: python bot.py
 
-      - name: Save state cache
-        uses: actions/cache/save@v3
-        with:
-          path: state.json
-          key: state-cache-${{ github.run_id }}
+      - name: Commit and Push State
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git commit -m "Update stock state [skip ci]" || echo "No changes to commit"
+          git push
