@@ -7,165 +7,137 @@ from datetime import datetime, timezone, timedelta
 # -----------------------
 # CONFIG
 # -----------------------
-with open("config.json", "r", encoding="utf-8") as f:
-    config = json.load(f)
+# ใช้ทางเลือกเผื่อไฟล์หายให้บอทไม่พัง
+def load_config():
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("Error: config.json not found!")
+        return {"stocks": {}}
 
-STOCKS = config["stocks"]
+config = load_config()
+STOCKS = config.get("stocks", {})
 
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 LINE_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
 
 STATE_FILE = "state.json"
-
 TZ = timezone(timedelta(hours=7))
 
-
 # -----------------------
-# STATE
+# STATE MANAGEMENT
 # -----------------------
 def load_state():
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r") as f:
-                return json.load(f)
-        except:
+                content = f.read().strip()
+                return json.loads(content) if content else {}
+        except Exception as e:
+            print(f"Error loading state: {e}")
             return {}
     return {}
 
 def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
-
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f, indent=4)
+    except Exception as e:
+        print(f"Error saving state: {e}")
 
 # -----------------------
-# MARKET TIME
+# MARKET TIME (US Market Example: 21:30 - 04:00 TH)
 # -----------------------
 def market_open():
-
     now = datetime.now(TZ)
-    weekday = now.weekday()
-
+    weekday = now.weekday() # 0=Mon, 4=Fri
     minutes = now.hour * 60 + now.minute
 
+    # เวลาเปิด 21:30 (1290 นาที) ถึง 04:00 (240 นาที ของวันถัดไป)
     open_time = 21 * 60 + 30
     close_time = 4 * 60
 
-    if weekday <= 4 and minutes >= open_time:
+    if weekday <= 4 and minutes >= open_time: # คืนวันจันทร์-ศุกร์
         return True
-
-    if 1 <= weekday <= 5 and minutes < close_time:
+    if 1 <= weekday <= 5 and minutes < close_time: # เช้าวันอังคาร-เสาร์
         return True
-
     return False
 
-
 # -----------------------
-# GET PRICE
+# GET PRICE & LINE
 # -----------------------
 def get_price(symbol):
-
-    url = "https://finnhub.io/api/v1/quote"
-
-    params = {
-        "symbol": symbol,
-        "token": FINNHUB_API_KEY
-    }
-
+    url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, timeout=10)
         data = r.json()
-        return data.get("c")
+        return data.get("c") # Current price
     except:
         return None
 
-
-# -----------------------
-# LINE
-# -----------------------
 def send_line(text):
-
     url = "https://api.line.me/v2/bot/message/push"
-
     headers = {
         "Authorization": f"Bearer {LINE_TOKEN}",
         "Content-Type": "application/json"
     }
-
     payload = {
         "to": LINE_USER_ID,
-        "messages": [{
-            "type": "text",
-            "text": text
-        }]
+        "messages": [{"type": "text", "text": text}]
     }
-
     requests.post(url, headers=headers, json=payload)
 
-
 # -----------------------
-# CHECK STOCK
+# CORE LOGIC
 # -----------------------
 def check_stock(symbol, rule, state):
-
     price = get_price(symbol)
-
-    if price is None:
+    if price is None or price == 0:
         return
 
-    key = f"{symbol}_last_alert"
-
+    key = f"{symbol}_last_alert_price"
     target = rule["alert_down"]
+    last_alert_price = state.get(key)
 
-    # ต่ำกว่าเป้า
+    # เงื่อนไข 1: ถ้าราคาต่ำกว่าเป้า
     if price <= target:
-
-        last = state.get(key)
-
-        # แจ้งครั้งแรก
-        if last is None:
-
-            send_line(
-                f"🔻 {symbol} หลุดเป้า\n"
-                f"ราคา: {price}\n"
-                f"เป้า: {target}"
-            )
-
+        # ถ้ายังไม่เคยแจ้งเตือนเลย
+        if last_alert_price is None:
+            send_line(f"🔻 {symbol} หลุดเป้า!\nราคาปัจจุบัน: {price}\nเป้าหมาย: {target}")
             state[key] = price
+            print(f"First alert for {symbol}")
 
-        # ลงเพิ่ม 5$
-        elif last - price >= 5:
-
-            send_line(
-                f"🔻 {symbol} ลงเพิ่ม\n"
-                f"ราคา: {price}"
-            )
-
+        # ถ้าเคยแจ้งไปแล้ว และราคาลงมาอีก 5 หน่วยจากราคาที่แจ้งล่าสุด
+        elif (last_alert_price - price) >= 5:
+            send_line(f"📉 {symbol} ลงต่อรุนแรง!\nราคาปัจจุบัน: {price}\n(ลดลงจากจุดแจ้งเตือนก่อนหน้า {round(last_alert_price - price, 2)})")
             state[key] = price
+            print(f"Subsequent alert for {symbol}")
 
-    else:
-        # กลับเหนือเป้า รีเซ็ต
+    # เงื่อนไข 2: ถ้าราคากลับขึ้นไปสูงกว่าเป้า (Reset เพื่อรอแจ้งใหม่เมื่อมันหลุดอีกรอบ)
+    elif price > target + 2: # +2 ไว้เป็น Buffer กันราคาวิ่งสลับไปมาที่เส้นเป้าหมาย
         if key in state:
             del state[key]
-
+            print(f"Reset state for {symbol} (Price recovered)")
 
 # -----------------------
-# MAIN LOOP
+# MAIN (No while True for GitHub Actions)
 # -----------------------
-print("bot running...")
+def main():
+    if not market_open():
+        print(f"[{datetime.now(TZ)}] Market is closed. Skipping...")
+        return
 
-state = load_state()
+    print(f"[{datetime.now(TZ)}] Checking stocks...")
+    state = load_state()
+    
+    for symbol, rule in STOCKS.items():
+        check_stock(symbol, rule, state)
+        time.sleep(1) # เลี่ยง Rate limit
 
-while True:
+    save_state(state)
+    print("Done.")
 
-    if market_open():
-
-        for symbol, rule in STOCKS.items():
-
-            check_stock(symbol, rule, state)
-
-            time.sleep(1)
-
-        save_state(state)
-
-    time.sleep(60)
+if __name__ == "__main__":
+    main()
