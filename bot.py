@@ -97,29 +97,35 @@ def check_stock(symbol, rule, state):
     if price is None or price == 0:
         return
 
-    key = f"{symbol}_last_alert_price"
-    target = rule["alert_down"]
-    last_alert_price = state.get(key)
+    # สร้าง Key แยกกันระหว่างขาขึ้นกับขาลง
+    key_down = f"{symbol}_last_down_price"
+    key_up = f"{symbol}_last_up_price"
+    
+    target_down = rule.get("alert_down")
+    target_up = rule.get("alert_up")
 
-    # เงื่อนไข 1: ถ้าราคาต่ำกว่าเป้า
-    if price <= target:
-        # ถ้ายังไม่เคยแจ้งเตือนเลย
-        if last_alert_price is None:
-            send_line(f"🔻 {symbol} หลุดเป้า!\nราคาปัจจุบัน: {price}\nเป้าหมาย: {target}")
-            state[key] = price
-            print(f"First alert for {symbol}")
+    # --- เช็กขาลง (Down) ---
+    if target_down and price <= target_down:
+        last_down = state.get(key_down)
+        if last_down is None or (last_down - price) >= 5:
+            send_line(f"🔻 {symbol} หลุดเป้าขาลง!\nราคา: {price}\nเป้า: {target_down}")
+            state[key_down] = price
+    elif target_down and price > target_down + 2:
+        if key_down in state: del state[key_down]
 
-        # ถ้าเคยแจ้งไปแล้ว และราคาลงมาอีก 5 หน่วยจากราคาที่แจ้งล่าสุด
-        elif (last_alert_price - price) >= 5:
-            send_line(f"📉 {symbol} ลงต่อรุนแรง!\nราคาปัจจุบัน: {price}\n(ลดลงจากจุดแจ้งเตือนก่อนหน้า {round(last_alert_price - price, 2)})")
-            state[key] = price
-            print(f"Subsequent alert for {symbol}")
-
-    # เงื่อนไข 2: ถ้าราคากลับขึ้นไปสูงกว่าเป้า (Reset เพื่อรอแจ้งใหม่เมื่อมันหลุดอีกรอบ)
-    elif price > target + 2: # +2 ไว้เป็น Buffer กันราคาวิ่งสลับไปมาที่เส้นเป้าหมาย
-        if key in state:
-            del state[key]
-            print(f"Reset state for {symbol} (Price recovered)")
+    # --- เช็กขาขึ้น (Up) --- เพิ่มส่วนนี้เข้าไปครับ!
+    if target_up and price >= target_up:
+        last_up = state.get(key_up)
+        # แจ้งครั้งแรกที่ทะลุเป้า หรือ แจ้งเพิ่มทุกครั้งที่ขึ้นไปอีก 5$
+        if last_up is None or (price - last_up) >= 5:
+            send_line(f"🚀 {symbol} ทะลุเป้าขาขึ้น!\nราคา: {price}\nเป้า: {target_up}")
+            state[key_up] = price
+            print(f"Alert Up for {symbol}")
+            
+    elif target_up and price < target_up - 2:
+        # ถ้าราคาตกลงมาต่ำกว่าเป้าขาขึ้น (Reset) เพื่อรอแจ้งใหม่เมื่อมันพุ่งรอบหน้า
+        if key_up in state:
+            del state[key_up]
 
 # -----------------------
 # MAIN (No while True for GitHub Actions)
