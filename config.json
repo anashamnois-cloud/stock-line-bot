@@ -5,8 +5,8 @@
 
   "stocks": {
     "AMD": {
-      "alert_up": 250,
-      "alert_down": 200
+      "alert_up": 300,
+      "alert_down": 250
     },
     "GOOGL": {
       "alert_up": 350,
