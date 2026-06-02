@@ -3,7 +3,7 @@ name: Stock Line Bot (Always-on Version)
 on:
   schedule:
     # รันเวลา 14:25 UTC (หรือ 21:25 น. เวลาไทย) วันจันทร์ - ศุกร์ (ปลุกแค่วันละรอบ)
-    - cron: "25 14 * * 1-5" 
+    - cron: "00 14 * * 1-5" 
   workflow_dispatch: 
 
 jobs:
