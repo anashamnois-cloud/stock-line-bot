@@ -103,46 +103,54 @@ def check_stock(symbol, rule, state):
     target_up = rule.get("alert_up")
 
     # ==========================================
-    # 🚀 โซนขาขึ้น (UP & TRAILING DOWN FROM PEAK)
+    # 🚀 โซนขาขึ้น (เน้นแจ้ง New High เท่านั้น)
     # ==========================================
     if target_up and price >= target_up:
         last_up = state.get(key_up)
         
-        # แจ้งครั้งแรกที่ทะลุเป้า / ขึ้นต่ออีก 5 / ย่อตัวลงจากยอดสูงสุด 5
         if last_up is None:
             send_line(f"🚀 {symbol} ทะลุเป้าขาขึ้น!\nราคา: {price}\nเป้า: {target_up}")
             state[key_up] = price
+        # ล็อกเงื่อนไข: จะเตือนพุ่งต่อเมื่อต้องเป็นราคาที่ "สูงกว่ายอดเดิม" เกิน 5 หน่วยขึ้นไปเท่านั้น
         elif (price - last_up) >= 5:
-            send_line(f"📈 {symbol} พุ่งต่อไม่หยุด!\nราคา: {price}\n(ขึ้นมาจากจุดเดิม +{round(price - last_up, 2)})")
-            state[key_up] = price
+            send_line(f"📈 {symbol} ทำยอดสูงสุดใหม่!\nราคา: {price}\n(พุ่งทะลุยอดเดิม +{round(price - last_up, 2)})")
+            state[key_up] = price  # เซฟยอดสูงสุดใหม่ (New High)
+        # จะเตือนย่อตัวครั้งแรกเมื่อ "ราคายังเท่ากับยอดสูงสุดเดิม" แต่ร่วงลงมาเกิน 5 หน่วย
         elif (last_up - price) >= 5:
-            send_line(f"📉 {symbol} ย่อตัวลงจากยอดสูงสุด!\nราคา: {price}\n(ลดลงจากจุดสูงสุด -{round(last_up - price, 2)})")
-            state[key_up] = price # อัปเดตฐานใหม่เป็นจุดที่ย่อลงมา
+            # ตรวจสอบเพิ่มไม่ให้แจ้งเตือนย่อตัวซ้ำซากที่ราคาเดิม
+            key_warned_drop = f"{symbol}_warned_drop"
+            if state.get(key_warned_drop) != last_up: 
+                send_line(f"📉 {symbol} ย่อตัวลงจากยอดสูงสุด!\nราคา: {price}\n(ลดลงจากจุดสูงสุด -{round(last_up - price, 2)})")
+                state[key_warned_drop] = last_up  # ล็อกไว้ว่ายอดนี้เตือนย่อตัวไปแล้ว ห้ามเตือนซ้ำอีกจนกว่าจะมี New High
             
     elif target_up and price < target_up - 5:
-        # ถ้าราคามันร่วงกลับลงมาต่ำกว่าเป้าเกิน 5 หน่วย ค่อยรีเซ็ตสมอง
         if key_up in state: del state[key_up]
+        if f"{symbol}_warned_drop" in state: del state[f"{symbol}_warned_drop"]
+
 
     # ==========================================
-    # 🔻 โซนขาลง (DOWN & TRAILING UP FROM BOTTOM)
+    # 🔻 โซนขาลง (เน้นแจ้ง New Low เท่านั้น)
     # ==========================================
     if target_down and price <= target_down:
         last_down = state.get(key_down)
         
-        # แจ้งครั้งแรกที่หลุดเป้าล่าง / ดิ่งลงต่ออีก 5 / ดีดเด้งจากก้นเหวกลับขึ้นมา 5
         if last_down is None:
             send_line(f"🔻 {symbol} หลุดเป้าขาลง!\nราคา: {price}\nเป้า: {target_down}")
             state[key_down] = price
+        # ล็อกเงื่อนไข: จะเตือนดิ่งต่อเมื่อต้องเป็นราคาที่ "ต่ำกว่าก้นเหวเดิม" ลงไปอีก 5 หน่วยเท่านั้น
         elif (last_down - price) >= 5:
-            send_line(f"📉 {symbol} ดิ่งลงเหวต่อเนื่อง!\nราคา: {price}\n(ลดลงจากจุดเดิม -{round(last_down - price, 2)})")
-            state[key_down] = price
+            send_line(f"📉 {symbol} ทุบสถิติดิ่งลงเหวใหม่!\nราคา: {price}\n(ทะลุก้นเหวเดิม -{round(last_down - price, 2)})")
+            state[key_down] = price  # เซฟจุดต่ำสุดใหม่ (New Low)
+        # จะเตือนเด้งกลับครั้งแรกเมื่อ "ราคายังเท่ากับก้นเหวเดิม" แต่ดีดกลับขึ้นมาเกิน 5 หน่วย
         elif (price - last_down) >= 5:
-            send_line(f"🧗 {symbol} เริ่มเด้งกลับจากก้นเหว!\nราคา: {price}\n(ดีดขึ้นมาจากจุดต่ำสุด +{round(price - last_down, 2)})")
-            state[key_down] = price # อัปเดตฐานใหม่เป็นจุดที่เด้งขึ้นมา
+            key_warned_bounce = f"{symbol}_warned_bounce"
+            if state.get(key_warned_bounce) != last_down:
+                send_line(f"🧗 {symbol} เริ่มเด้งกลับจากก้นเหว!\nราคา: {price}\n(ดีดขึ้นมาจากจุดต่ำสุด +{round(price - last_down, 2)})")
+                state[key_warned_bounce] = last_down  # ล็อกไว้ว่าก้นเหวนี้เตือนเด้งไปแล้ว ห้ามเตือนซ้ำอีกจนกว่าจะมี New Low
             
     elif target_down and price > target_down + 5:
-        # ถ้าราคาดีดกลับขึ้นไปสูงกว่าเป้าขาลงเกิน 5 หน่วย ค่อยรีเซ็ตสมอง
         if key_down in state: del state[key_down]
+        if f"{symbol}_warned_bounce" in state: del state[f"{symbol}_warned_bounce"]
 
 # -----------------------
 # MAIN LOOP (รันต่อเนื่องยาวๆ บน GitHub Actions)
