@@ -156,34 +156,19 @@ def check_stock(symbol, rule, state):
 # MAIN LOOP (รันต่อเนื่องยาวๆ บน GitHub Actions)
 # -----------------------
 def main():
-    print(f"[{datetime.now(TZ)}] Bot started and waiting for market...")
-    state = load_state()
-    has_run_in_market = False 
+    if not market_open():
+        print(f"[{datetime.now(TZ)}] Market is closed. Skipping...")
+        return
 
-    while True:
-        now = datetime.now(TZ)
-        
-        if market_open():
-            print(f"[{now.strftime('%H:%M:%S')}] Checking stock prices...")
-            for symbol, rule in STOCKS.items():
-                check_stock(symbol, rule, state)
-                time.sleep(1) 
-            
-            has_run_in_market = True
-            time.sleep(60) # พัก 1 นาทีแล้วเช็กซ้ำแบบเรียลไทม์
-            
-        else:
-            # ถ้าตลาดปิดแล้ว และก่อนหน้านี้บอทเคยรันช่วงตลาดเปิดมาแล้ว -> ให้จบโปรแกรมเพื่อบันทึกไฟล์
-            if has_run_in_market:
-                print(f"[{now}] Market has closed. Exiting loop to save state...")
-                break 
-                
-            # ถ้าตื่นมาแล้วตลาดยังไม่เปิด (เช่น มารอก่อนเวลา) ให้รอ 1 นาทีแล้วเช็กเวลาตลาดใหม่
-            print(f"[{now.strftime('%H:%M:%S')}] Market is closed. Waiting...")
-            time.sleep(60)
+    print(f"[{datetime.now(TZ)}] Checking stocks...")
+    state = load_state()
+    
+    for symbol, rule in STOCKS.items():
+        check_stock(symbol, rule, state)
+        time.sleep(1)
 
     save_state(state)
-    print("System finished.")
+    print("Done.")
 
 if __name__ == "__main__":
     main()
