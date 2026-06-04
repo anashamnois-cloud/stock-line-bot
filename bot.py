@@ -52,16 +52,17 @@ def save_state(state):
 # -----------------------
 def market_open():
     now = datetime.now(TZ)
-    weekday = now.weekday()  # 0=Mon, 4=Fri
+    weekday = now.weekday()
     minutes = now.hour * 60 + now.minute
 
     open_time = 20 * 60 + 30  # 20:30
     close_time = 4 * 60       # 04:00
 
-    if weekday <= 4 and minutes >= open_time:  # คืนวันจันทร์-ศุกร์
+    if 0 <= weekday <= 4 and minutes >= open_time:  # คืนจันทร์-ศุกร์
         return True
-    if 1 <= weekday <= 5 and minutes < close_time:  # เช้าวันอังคาร-เสาร์
+    if 2 <= weekday <= 6 and minutes < close_time:  # เช้าอังคาร-อาทิตย์ (ไม่รวมจันทร์)
         return True
+
     return False
 
 # -----------------------
