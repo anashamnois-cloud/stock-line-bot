@@ -56,13 +56,14 @@ def market_open():
     weekday = now.weekday()
     minutes = now.hour * 60 + now.minute
 
-    open_time = 20 * 60 + 30
-    close_time = 4 * 60
+    open_time = 20 * 60 + 30  # 20:30
+    close_time = 4 * 60       # 04:00
 
-    if 0 <= weekday <= 4 and minutes >= open_time:
+    if 0 <= weekday <= 4 and minutes >= open_time:  # คืนจันทร์-ศุกร์
         return True
-    if 2 <= weekday <= 6 and minutes < close_time:
+    if 1 <= weekday <= 4 and minutes < close_time:  # เช้าอังคาร-ศุกร์
         return True
+
     return False
 
 # -----------------------
