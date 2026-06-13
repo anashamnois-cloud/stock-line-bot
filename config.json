@@ -19,6 +19,10 @@
     "EOSE": {
       "alert_up": 18,
       "alert_down": 10
+    },
+    "SPCX": {
+      "alert_up": 170,
+      "alert_down": 150
     }
 
   }
