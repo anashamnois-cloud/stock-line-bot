@@ -104,6 +104,9 @@ def check_stock(symbol, rule, state):
     target_down = rule.get("alert_down")
     target_up = rule.get("alert_up")
 
+    # ==========================================
+    # โซนขาขึ้น
+    # ==========================================
     if target_up and price >= target_up:
         last_up = state.get(key_up)
 
@@ -119,10 +122,13 @@ def check_stock(symbol, rule, state):
                 send_line(f"📉 {symbol} ย่อตัวลงจากยอดสูงสุด!\nราคา: {price}\n(ลดลงจากจุดสูงสุด -{round(last_up - price, 2)})")
                 state[key_warned_drop] = last_up
 
-    elif target_up and price < target_up - 5:
+    elif target_up and price < target_down:  # ลบ state ขาขึ้นเมื่อราคาหลุดเป้าขาลง
         if key_up in state: del state[key_up]
         if f"{symbol}_warned_drop" in state: del state[f"{symbol}_warned_drop"]
 
+    # ==========================================
+    # โซนขาลง
+    # ==========================================
     if target_down and price <= target_down:
         last_down = state.get(key_down)
 
@@ -138,7 +144,7 @@ def check_stock(symbol, rule, state):
                 send_line(f"🧗 {symbol} เริ่มเด้งกลับจากก้นเหว!\nราคา: {price}\n(ดีดขึ้นมาจากจุดต่ำสุด +{round(price - last_down, 2)})")
                 state[key_warned_bounce] = last_down
 
-    elif target_down and price > target_down + 5:
+    elif target_down and price > target_up:  # ลบ state ขาลงเมื่อราคากลับขึ้นเกินเป้าขาขึ้น
         if key_down in state: del state[key_down]
         if f"{symbol}_warned_bounce" in state: del state[f"{symbol}_warned_bounce"]
 
