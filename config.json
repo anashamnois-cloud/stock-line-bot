@@ -14,7 +14,7 @@
     },
     "RKLB": {
       "alert_up": 120,
-      "alert_down": 100
+      "alert_down": 90
     },
     "EOSE": {
       "alert_up": 18,
