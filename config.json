@@ -23,8 +23,15 @@
     "SPCX": {
       "alert_up": 170,
       "alert_down": 150
-    }
-
+    },
+    "SNDK": {
+      "alert_up": 2200,
+      "alert_down": 2000
+    },
+    "ASML": {
+      "alert_up": 2000,
+      "alert_down": 1700
+      
   }
 }
 
