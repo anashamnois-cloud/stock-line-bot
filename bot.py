@@ -136,12 +136,12 @@ def check_stock(symbol, rule, state):
             send_line(f"🔻 {symbol} หลุดเป้าขาลง!\nราคา: {price}\nเป้า: {target_down}")
             state[key_down] = price
         elif (last_down - price) >= 5:
-            send_line(f"📉 {symbol} ทุบสถิติดิ่งลงเหวใหม่!\nราคา: {price}\n(ทะลุก้นเหวเดิม -{round(last_down - price, 2)})")
+            send_line(f"🔻 {symbol} ร่วงต่อ (New Low)!\nราคาปัจจุบัน: {price}\nลดลงอีก: -{round(last_down - price, 2)}")
             state[key_down] = price
         elif (price - last_down) >= 5:
             key_warned_bounce = f"{symbol}_warned_bounce"
             if state.get(key_warned_bounce) != last_down:
-                send_line(f"🧗 {symbol} เริ่มเด้งกลับจากก้นเหว!\nราคา: {price}\n(ดีดขึ้นมาจากจุดต่ำสุด +{round(price - last_down, 2)})")
+                send_line(f"📈 {symbol} ฟื้นตัวจากจุดต่ำสุด!\nราคา: {price}\n(ดีดกลับขึ้นมา +{round(price - last_down, 2)})")
                 state[key_warned_bounce] = last_down
 
     elif target_down and price > target_up:  # ลบ state ขาลงเมื่อราคากลับขึ้นเกินเป้าขาขึ้น
